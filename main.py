@@ -82,9 +82,9 @@ def create_container(request: CreateServiceRequest, x=Depends(secure)):
                 return {"error": True, "message": error_message}
         else:
             # Handle other API errors
-            return {"error": True, "message": e.explanation}
+            return {"error": True, "messageyhannasndasndnasdnasndasndnasd": e.explanation}
     except Exception as e:
-        return {"error": True, "message": str(e)}
+        return {"error": True, "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": str(e)}
     
 # write a function to stop a container by container id
 @app.get("/{container_id}/stop")
