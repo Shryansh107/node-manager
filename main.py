@@ -224,8 +224,8 @@ def unmap_domain(id: str, x=Depends(secure)):
         
         return {"error": True, "message": str(e)}
 
-@app.post("/redeploy")
-def redeploy_container(container_id: str, tag: str, request: CreateServiceRequest, x=Depends(secure)):
+@app.post("/redeploy/{container_id}/{tag}")
+def redeploy_container(container_id: str, tag: str, request: CreateServiceRequest,force: bool = False, x=Depends(secure)):
     try:
         # Get the existing container
         container = client.containers.get(container_id)
@@ -239,7 +239,10 @@ def redeploy_container(container_id: str, tag: str, request: CreateServiceReques
         
         # Stop and remove the existing container if running
         if container.status == "running":
-            container.stop()
+            if force:
+                container.stop()
+            else:
+                return {"error": True, "message": "Container is running. Stop the container before deleting it."}
         container.remove()
 
         # Extract base image name and apply new tag
@@ -285,4 +288,3 @@ def redeploy_container(container_id: str, tag: str, request: CreateServiceReques
         return {"error": True, "message": e.explanation}
     except Exception as e:
         return {"error": True, "message": str(e)}
-
