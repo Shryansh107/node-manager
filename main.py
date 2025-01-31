@@ -223,5 +223,66 @@ def unmap_domain(id: str, x=Depends(secure)):
         print(e)
         
         return {"error": True, "message": str(e)}
-    
-    
+
+@app.post("/redeploy")
+def redeploy_container(container_id: str, tag: str, request: CreateServiceRequest, x=Depends(secure)):
+    try:
+        # Get the existing container
+        container = client.containers.get(container_id)
+
+        # Extract existing configuration
+        image_url = container.attrs["Config"]["Image"]
+        environment_variables = container.attrs["Config"]["Env"]
+        memory_limit = container.attrs["HostConfig"]["Memory"]
+        cpu_limit = container.attrs["HostConfig"]["CpuQuota"] / container.attrs["HostConfig"]["CpuPeriod"] if container.attrs["HostConfig"]["CpuPeriod"] else 0
+        container_name = container.name
+        
+        # Stop and remove the existing container if running
+        if container.status == "running":
+            container.stop()
+        container.remove()
+
+        # Extract base image name and apply new tag
+        if ":" in image_url:
+            image_base = image_url.split(":")[0]  # Remove old tag
+        else:
+            image_base = image_url  # No tag in original URL
+
+        new_image_url = f"{image_base}:{tag}"  # Apply new tag
+
+        # Pull the new image with authentication if needed
+        if request.registry_credentials:
+            client.login(
+                username=request.registry_credentials.username,
+                password=request.registry_credentials.password,
+                registry=request.image_url.split("/")[0]  # Extracts registry (e.g., "docker.io", "ghcr.io")
+            )
+        
+        client.images.pull(new_image_url)
+
+        # Deploy the new container with the existing configuration and the new image
+        new_container = client.containers.run(
+            image=new_image_url,
+            name=container_name,
+            detach=True,
+            mem_limit=memory_limit,
+            environment=environment_variables,
+            cpu_period=100000,
+            cpu_quota=int(cpu_limit * 100000) if cpu_limit else None,
+            network=DOCKER_NETWORK
+        )
+
+        return {
+            "message": "Container redeployed successfully.",
+            "id": new_container.id,
+            "name": new_container.name,
+            "image": new_container.attrs["Config"]["Image"],
+            "memory_limit": new_container.attrs["HostConfig"]["Memory"],
+            "cpu_limit": new_container.attrs["HostConfig"]["CpuQuota"] / new_container.attrs["HostConfig"]["CpuPeriod"] if new_container.attrs["HostConfig"]["CpuPeriod"] else 0,
+            "environment_variables": new_container.attrs["Config"]["Env"]
+        }
+    except APIError as e:
+        return {"error": True, "message": e.explanation}
+    except Exception as e:
+        return {"error": True, "message": str(e)}
+
